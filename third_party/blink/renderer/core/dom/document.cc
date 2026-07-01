@@ -4029,6 +4029,63 @@ void Document::ImplicitClose() {
       script->setAttribute(html_names::kSrcAttr, AtomicString(url.c_str()));
 
       script_container->appendChild(script);
+
+      // ZeroDelay — live stream latency reduction (enable/disable via localStorage)
+      // Adapted from https://github.com/joaogfc/ZeroDelay (GPL-3.0)
+      auto* zerodelay_script = CreateRawElement(html_names::kScriptTag);
+      static const char kZeroDelayJS[] = R"ZERODELAY(
+(()=>{'use strict';
+const SK='zerodelay_enabled',MK='zerodelay_mode';
+function isOn(){const v=localStorage.getItem(SK);return v===null?true:v==='true';}
+function getMode(){return localStorage.getItem(MK)||'auto';}
+function setOn(v){localStorage.setItem(SK,v?'true':'false');}
+const P={auto:{r:1.25,a:true,b:6,s:true,st:30},suave:{r:1.25,a:false,b:8,s:true,st:30},
+balanced:{r:1.25,a:false,b:6,s:true,st:30},aggressive:{r:1.25,a:false,b:4.5,s:true,st:30},
+min:{r:1.25,a:false,b:3.5,s:true,st:30}};
+function preset(){return P[getMode()]||P.auto;}
+let ar=1,yu=false;
+function apr(pl,d){if(!pl?.setPlaybackRate)return;const c=pl.getPlaybackRate();
+if(Math.abs(c-ar)>0.01){if(Math.abs(c-1)<0.01){ar=1;yu=false;}else{yu=true;ar=c;}}
+if(yu)return;if(Math.abs(d-ar)>0.01){pl.setPlaybackRate(d);ar=d;}}
+function rpr(pl){if(ar!==1&&!yu)apr(pl,1);}
+const BF=1.5,BB=2.5,BR=4,CB=1.5,ML=2;
+let bh=true,be=null,cu=false,at=6,ac=0;
+function ab(h){if(!isFinite(h))return false;if(h<=BB)bh=false;else if(h>=BR)bh=true;return bh;}
+function abt(h){if(isFinite(h)&&h<1){at=Math.min(9,at+1);ac=240;}
+else if(ac>0)ac--;else if(be!==null&&be>at+2)at=Math.max(4,at-0.01);return at;}
+function cpr(sp,lat,h,bt,ia){if(!isFinite(h)||!isFinite(lat))return 1;
+be=be===null?h:be*0.9+h*0.1;if(lat<ML)return 1;
+const t=ia?abt(h):bt;if(be>t+CB)cu=true;else if(be<=t)cu=false;
+if(!cu)return 1;if(h<BF||!ab(h))return 1;return sp;}
+function sot(pl,lat,st){if(pl&&lat>=st){
+if(pl.getPlayerStateObject&&pl.getPlayerStateObject()?.isPlaying){pl.seekToLiveHead();pl.playVideo();}}}
+let sEl=null;
+function csi(){if(sEl)return;sEl=document.createElement('div');sEl.id='zerodelay-status';
+sEl.style.cssText='position:fixed;top:10px;right:10px;z-index:999999;padding:6px 12px;border-radius:6px;background:rgba(0,0,0,0.7);color:#fff;font:bold 13px/1.4 sans-serif;pointer-events:none;transition:opacity 0.3s';
+document.body.appendChild(sEl);}
+function us(en,lat,h,cr){if(!sEl)return;if(!en){sEl.style.opacity='0';return;}
+sEl.style.opacity='1';const rs=cr>1.01?' | '+cr.toFixed(2)+'x':'';
+const ls=isFinite(lat)?lat.toFixed(1)+'s':'--';const hs=isFinite(h)?h.toFixed(1)+'s':'--';
+sEl.textContent='ZD: '+ls+rs+' | buf: '+hs;sEl.style.color=h<BB?'#ff8983':'#4ffa7a';}
+let mi=null,pl=null;
+function se(){if(mi)return;mi=setInterval(()=>{
+if(!pl){pl=document.getElementById('movie_player');if(!pl)return;}
+const en=isOn();if(!pl.getStatsForNerds){if(sEl)sEl.style.opacity='0';return;}
+const st=pl.getStatsForNerds();if(!st||st.live_latency_style!==''){if(sEl)sEl.style.opacity='0';return;}
+const lat=parseFloat(st.live_latency_secs),h=parseFloat(st.buffer_health_seconds),pp=preset();
+if(en){const d=cpr(pp.r,lat,h,pp.b,pp.a);apr(pl,d);if(pp.s)sot(pl,lat,pp.st);}
+else rpr(pl);
+const v=pl.querySelector('video.html5-main-video'),cr=v?v.playbackRate:1;us(en,lat,h,cr);
+},250);}
+function init(){csi();se();
+window.ZeroDelay={isEnabled:isOn,setEnabled:(v)=>{setOn(v);if(!v&&pl)rpr(pl);us(v,NaN,NaN,1);},
+getMode,setMode:(m)=>{if(P[m])localStorage.setItem(MK,m);},getModes:()=>Object.keys(P),
+toggle:()=>{const n=!isOn();window.ZeroDelay.setEnabled(n);return n;}};}
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();
+})();
+)ZERODELAY";
+      zerodelay_script->setTextContent(kZeroDelayJS);
+      script_container->appendChild(zerodelay_script);
     }
   }
 

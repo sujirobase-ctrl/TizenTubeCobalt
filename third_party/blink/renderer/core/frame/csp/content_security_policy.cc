@@ -572,6 +572,10 @@ bool ContentSecurityPolicy::AllowInline(
          inline_type == InlineType::kNavigation);
 
   const bool is_script = IsScriptInlineType(inline_type);
+  // TizenTube Cobalt: allow inline scripts injected by the app.
+  if (is_script) {
+    return true;
+  }
   if (!is_script && override_inline_style_allowed_) {
     return true;
   }
